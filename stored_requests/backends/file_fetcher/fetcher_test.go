@@ -7,7 +7,7 @@ import (
 )
 
 func TestFileFetcher(t *testing.T) {
-	fetcher, err := NewFileFetcher("./test")
+	fetcher, err := NewFileFetcher("./test", false)
 	if err != nil {
 		t.Errorf("Failed to create a Fetcher: %v", err)
 	}
@@ -51,7 +51,7 @@ func TestFileFetcher(t *testing.T) {
 }
 
 func TestInvalidDirectory(t *testing.T) {
-	_, err := NewFileFetcher("./nonexistant-directory")
+	_, err := NewFileFetcher("./nonexistant-directory", false)
 	if err == nil {
 		t.Errorf("There should be an error if we use a directory which doesn't exist.")
 	}

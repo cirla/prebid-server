@@ -977,7 +977,7 @@ const requestConfigPath = "./stored_requests/data/by_id"
 func NewFetchers(cfg *config.StoredRequests, db *sql.DB) (byId stored_requests.CacheableFetcher, byAmpId stored_requests.CacheableFetcher, err error) {
 	if cfg.Files {
 		glog.Infof("Loading Stored Requests from filesystem at path %s", requestConfigPath)
-		byId, err = file_fetcher.NewFileFetcher(requestConfigPath)
+		byId, err = file_fetcher.NewFileFetcher(requestConfigPath, false)
 		// Currently assuming the file store is "flat", that is IDs are unique across all config types
 		// and that the files for all the types sit next to each other.
 		byAmpId = byId
