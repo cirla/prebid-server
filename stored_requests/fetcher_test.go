@@ -57,11 +57,9 @@ func TestImperfectCache(t *testing.T) {
 	if !bytes.Equal(cache.gotSaveValues["uncached"], []byte("false")) {
 		t.Errorf("Failed to save cache miss data. Expected false, got %s", cache.gotSaveValues["uncached"])
 	}
-
 	if len(fetcher.gotRequest) != 1 {
 		t.Errorf("The delegate fetcher should have been called with 1 ID. Got %d.", len(fetcher.gotRequest))
 	}
-
 	if fetcher.gotRequest[0] != "uncached" {
 		t.Errorf("The delegate fetcher was called with the wrong id. Expected uncached, got %s", fetcher.gotRequest[0])
 	}
@@ -113,6 +111,7 @@ func TestCacheSaves(t *testing.T) {
 }
 
 type mockFetcher struct {
+	Subscriptions
 	returnData map[string]json.RawMessage
 	returnErrs []error
 	gotRequest []string
@@ -124,16 +123,21 @@ func (f *mockFetcher) FetchRequests(ctx context.Context, ids []string) (map[stri
 }
 
 type mockCache struct {
-	gotSaveValues map[string]json.RawMessage
-	gotGetIds     []string
-	mockGetData   map[string]json.RawMessage
+	gotSaveValues    map[string]json.RawMessage
+	gotGetIds        []string
+	gotInvalidateIds []string
+	mockGetData      map[string]json.RawMessage
 }
 
-func (c *mockCache) GetRequests(ctx context.Context, ids []string) map[string]json.RawMessage {
+func (c *mockCache) Get(ctx context.Context, ids []string) map[string]json.RawMessage {
 	c.gotGetIds = ids
 	return c.mockGetData
 }
 
-func (c *mockCache) SaveRequests(ctx context.Context, values map[string]json.RawMessage) {
+func (c *mockCache) Invalidate(ctx context.Context, ids []string) {
+	c.gotInvalidateIds = ids
+}
+
+func (c *mockCache) Update(ctx context.Context, values map[string]json.RawMessage) {
 	c.gotSaveValues = values
 }

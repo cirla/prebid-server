@@ -10,7 +10,7 @@ import (
 	"github.com/prebid/prebid-server/stored_requests"
 )
 
-func NewFetcher(db *sql.DB, queryMaker func(int) (string, error)) stored_requests.Fetcher {
+func NewFetcher(db *sql.DB, queryMaker func(int) (string, error)) stored_requests.CacheableFetcher {
 	return &dbFetcher{
 		db:         db,
 		queryMaker: queryMaker,
@@ -19,6 +19,7 @@ func NewFetcher(db *sql.DB, queryMaker func(int) (string, error)) stored_request
 
 // dbFetcher fetches Stored Requests from a database. This should be instantiated through the NewFetcher() function.
 type dbFetcher struct {
+	stored_requests.Subscriptions
 	db         *sql.DB
 	queryMaker func(int) (string, error)
 }

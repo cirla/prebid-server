@@ -3,6 +3,7 @@ package in_memory
 import (
 	"context"
 	"encoding/json"
+
 	"github.com/coocood/freecache"
 	"github.com/golang/glog"
 	"github.com/prebid/prebid-server/config"
@@ -27,7 +28,7 @@ type cache struct {
 	ttlSeconds int
 }
 
-func (c *cache) GetRequests(ctx context.Context, ids []string) map[string]json.RawMessage {
+func (c *cache) Get(ctx context.Context, ids []string) map[string]json.RawMessage {
 	data := make(map[string]json.RawMessage, len(ids))
 	for _, id := range ids {
 		if bytes, err := c.lru.Get([]byte(id)); err == nil {
@@ -40,7 +41,13 @@ func (c *cache) GetRequests(ctx context.Context, ids []string) map[string]json.R
 	return data
 }
 
-func (c *cache) SaveRequests(ctx context.Context, values map[string]json.RawMessage) {
+func (c *cache) Invalidate(ctx context.Context, ids []string) {
+	for _, id := range ids {
+		c.lru.Del([]byte(id))
+	}
+}
+
+func (c *cache) Update(ctx context.Context, values map[string]json.RawMessage) {
 	for id, data := range values {
 		if err := c.lru.Set([]byte(id), data, c.ttlSeconds); err != nil {
 			glog.Errorf("error saving value in freecache: %v", err)
