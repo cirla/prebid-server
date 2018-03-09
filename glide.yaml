@@ -34,6 +34,8 @@ import:
   version: ^1.0.0
   subpackages:
   - jd
+- package: github.com/fsnotify/fsnotify
+  version: ~1.4.7
 testImport:
 - package: github.com/erikstmartin/go-testdb
 - package: github.com/stretchr/testify
