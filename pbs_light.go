@@ -974,7 +974,7 @@ const requestConfigPath = "./stored_requests/data/by_id"
 // If it can't generate both of those from the given config, then an error will be returned.
 //
 // This function assumes that the argument config has been validated.
-func NewFetchers(cfg *config.StoredRequests, db *sql.DB) (byId stored_requests.Fetcher, byAmpId stored_requests.Fetcher, err error) {
+func NewFetchers(cfg *config.StoredRequests, db *sql.DB) (byId stored_requests.CacheableFetcher, byAmpId stored_requests.CacheableFetcher, err error) {
 	if cfg.Files {
 		glog.Infof("Loading Stored Requests from filesystem at path %s", requestConfigPath)
 		byId, err = file_fetcher.NewFileFetcher(requestConfigPath)

@@ -4,9 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/prebid/prebid-server/stored_requests"
 	"io/ioutil"
 	"strings"
+
+	"github.com/prebid/prebid-server/stored_requests"
 )
 
 // NewFileFetcher _immediately_ loads stored request data from local files.
@@ -14,7 +15,7 @@ import (
 //
 // This expects each file in the directory to be named "{config_id}.json".
 // For example, when asked to fetch the request with ID == "23", it will return the data from "directory/23.json".
-func NewFileFetcher(directory string) (stored_requests.Fetcher, error) {
+func NewFileFetcher(directory string) (stored_requests.CacheableFetcher, error) {
 	fileInfos, err := ioutil.ReadDir(directory)
 	if err != nil {
 		return nil, err
@@ -29,15 +30,19 @@ func NewFileFetcher(directory string) (stored_requests.Fetcher, error) {
 			storedReqs[strings.TrimSuffix(fileInfo.Name(), ".json")] = json.RawMessage(fileData)
 		}
 	}
-	return &eagerFetcher{storedReqs}, nil
+	return &eagerFetcher{
+		stored_requests.Subscriptions{},
+		storedReqs,
+	}, nil
 }
 
 type eagerFetcher struct {
+	stored_requests.Subscriptions
 	storedReqs map[string]json.RawMessage
 }
 
 func (fetcher *eagerFetcher) FetchRequests(ctx context.Context, ids []string) (map[string]json.RawMessage, []error) {
-	var errors []error = nil
+	var errors []error
 	for _, id := range ids {
 		if _, ok := fetcher.storedReqs[id]; !ok {
 			errors = append(errors, fmt.Errorf("No config found for id: %s", id))
