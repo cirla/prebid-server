@@ -10,13 +10,11 @@ import (
 
 // EmptyFetcher is a nil-object which has no Stored Requests.
 // If PBS is configured to use this, then all the OpenRTB request data must be sent in the HTTP request.
-func EmptyFetcher() stored_requests.CacheableFetcher {
+func EmptyFetcher() stored_requests.Fetcher {
 	return &instance
 }
 
-type emptyFetcher struct {
-	stored_requests.Subscriptions
-}
+type emptyFetcher struct{}
 
 func (fetcher *emptyFetcher) FetchRequests(ctx context.Context, ids []string) (map[string]json.RawMessage, []error) {
 	errs := make([]error, 0, len(ids))

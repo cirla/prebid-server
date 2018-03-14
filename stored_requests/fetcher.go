@@ -38,73 +38,88 @@ type Cache interface {
 	Update(ctx context.Context, data map[string]json.RawMessage)
 }
 
-// CacheableFetcher is a type of Fetcher that can be composed with one or more
-// Caches via WithCache and provide updates and validations to those Caches
-// when necessary
-type CacheableFetcher interface {
-	Fetcher
-
-	// Subscribe notifies the Fetcher that a Cache is interested in Updates and Invalidations
-	// that may arise due to underlying changes to data
-	Subscribe(cache Cache)
+type composedCache struct {
+	caches []Cache
 }
 
-// CachedFetcher is the result of composing a CacheableFetcher with a Cache via WithCache
-// It appears as both a Cache so that it may Subscribe to the underlying Fetcher and as
-// a CacheableFetcher so that it may be composed with another Cache on top of it
-type CachedFetcher interface {
-	CacheableFetcher
-	Cache
-}
-
-// Subscriptions encapsulates forwarding updates and invalidations to subscribed Caches
-// It provides a convenient way to implement the CacheableFetcher interface by adding
-// it inside an implementation struct
-type Subscriptions struct {
-	subs []Cache
-}
-
-// Subscribe implementation (CacheableFetcher) for Subscriptions
-func (s *Subscriptions) Subscribe(cache Cache) {
-	s.subs = append(s.subs, cache)
-}
-
-// Invalidate convenience method to propagate invalidation to all subscribed Caches
-func (s *Subscriptions) Invalidate(ctx context.Context, ids []string) {
-	for _, c := range s.subs {
-		c.Invalidate(ctx, ids)
+// Compose will compose caches into a single cache.
+// The returned cache will attempt to Get from the caches in the order in which. they are provided,
+// stopping as soon as a value is found (or when all caches have been exhausted).
+// Invalidations and updates are propagated to all underlying caches.
+func Compose(caches []Cache) Cache {
+	return &composedCache{
+		caches: caches,
 	}
 }
 
-// Update convenience method to propagate invalidation to all subscribed Caches
-func (s *Subscriptions) Update(ctx context.Context, data map[string]json.RawMessage) {
-	for _, c := range s.subs {
-		c.Update(ctx, data)
+func (c *composedCache) Get(ctx context.Context, ids []string) (data map[string]json.RawMessage) {
+	data = make(map[string]json.RawMessage)
+	remainingIds := ids
+
+	for _, cache := range c.caches {
+		if cachedData := cache.Get(ctx, remainingIds); len(cachedData) > 0 {
+			// iterate over remainingIds from end, droppings ids as they are filled
+			for i := len(remainingIds) - 1; i >= 0; i-- {
+				if config, ok := cachedData[remainingIds[i]]; ok {
+					data[remainingIds[i]] = config
+					remainingIds = append(remainingIds[:i], remainingIds[i+1:]...)
+				}
+			}
+
+			// return if all ids filled
+			if len(remainingIds) == 0 {
+				return
+			}
+		}
 	}
+	return
+}
+
+func (c *composedCache) Invalidate(ctx context.Context, ids []string) {
+	for _, cache := range c.caches {
+		cache.Invalidate(ctx, ids)
+	}
+}
+
+func (c *composedCache) Update(ctx context.Context, data map[string]json.RawMessage) {
+	for _, cache := range c.caches {
+		cache.Update(ctx, data)
+	}
+}
+
+type Events interface {
+	Updates() chan map[string]json.RawMessage
+	Invalidations() chan []string
+}
+
+// Listen will run a goroutine that updates/invalidates the cache when events occur
+func Listen(cache Cache, events Events) {
+	go func() {
+		for {
+			select {
+			case data := <-events.Updates():
+				cache.Update(context.Background(), data)
+			case ids := <-events.Invalidations():
+				cache.Invalidate(context.Background(), ids)
+			}
+		}
+	}()
 }
 
 type fetcherWithCache struct {
-	Subscriptions
+	fetcher Fetcher
 	cache   Cache
-	fetcher CacheableFetcher
 }
 
 // WithCache returns a Fetcher which uses the given Cache before delegating to the original.
-// This can be called multiple times to compose Cache layers onto the backing Fetcher.
-func WithCache(fetcher CacheableFetcher, cache Cache) CachedFetcher {
-	f := &fetcherWithCache{
+// This can be called multiple times to compose Cache layers onto the backing Fetcher, though
+// it is usually more desirable to first compose caches with Compose, ensuring propagation of updates
+// and invalidations through all cache layers.
+func WithCache(fetcher Fetcher, cache Cache) Fetcher {
+	return &fetcherWithCache{
 		cache:   cache,
 		fetcher: fetcher,
 	}
-
-	// subscribe the underlying Cache to this Fetcher's updates, including
-	// those propagated from the underlying Fetcher
-	f.Subscribe(cache)
-
-	// subscribe this Fetcher to the underlying Fetcher's updates
-	fetcher.Subscribe(f)
-
-	return f
 }
 
 func (f *fetcherWithCache) FetchRequests(ctx context.Context, ids []string) (data map[string]json.RawMessage, errs []error) {
@@ -124,10 +139,4 @@ func (f *fetcherWithCache) FetchRequests(ctx context.Context, ids []string) (dat
 	}
 
 	return
-}
-
-// Get implementation to complete the implementation of CachedFetcher.
-// Forwards to underlying Cache.
-func (f *fetcherWithCache) Get(ctx context.Context, ids []string) map[string]json.RawMessage {
-	return f.cache.Get(ctx, ids)
 }

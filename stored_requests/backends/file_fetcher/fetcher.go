@@ -15,7 +15,7 @@ import (
 //
 // This expects each file in the directory to be named "{config_id}.json".
 // For example, when asked to fetch the request with ID == "23", it will return the data from "directory/23.json".
-func NewFileFetcher(directory string) (stored_requests.CacheableFetcher, error) {
+func NewFileFetcher(directory string) (stored_requests.Fetcher, error) {
 	fileInfos, err := ioutil.ReadDir(directory)
 	if err != nil {
 		return nil, err
@@ -31,13 +31,11 @@ func NewFileFetcher(directory string) (stored_requests.CacheableFetcher, error) 
 		}
 	}
 	return &eagerFetcher{
-		stored_requests.Subscriptions{},
 		storedReqs,
 	}, nil
 }
 
 type eagerFetcher struct {
-	stored_requests.Subscriptions
 	storedReqs map[string]json.RawMessage
 }
 

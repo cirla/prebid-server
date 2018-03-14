@@ -111,7 +111,6 @@ func TestCacheSaves(t *testing.T) {
 }
 
 type mockFetcher struct {
-	Subscriptions
 	returnData map[string]json.RawMessage
 	returnErrs []error
 	gotRequest []string
