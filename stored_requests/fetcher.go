@@ -87,13 +87,14 @@ func (c *composedCache) Update(ctx context.Context, data map[string]json.RawMess
 	}
 }
 
-type Events interface {
+// EventProducer will produce cache update and invalidation events on its channels
+type EventProducer interface {
 	Updates() chan map[string]json.RawMessage
 	Invalidations() chan []string
 }
 
 // Listen will run a goroutine that updates/invalidates the cache when events occur
-func Listen(cache Cache, events Events) {
+func Listen(cache Cache, events EventProducer) {
 	go func() {
 		for {
 			select {

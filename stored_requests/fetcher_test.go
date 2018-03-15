@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"testing"
 )
 
@@ -107,6 +108,53 @@ func TestCacheSaves(t *testing.T) {
 	composed.FetchRequests(context.Background(), []string{"abc", "abc"})
 	if len(fetcher.gotRequest) != 0 {
 		t.Errorf("No IDs should be requested from the fetcher for requests with duplicate ID. Got %#v", fetcher.gotRequest)
+	}
+}
+
+func TestComposedCache(t *testing.T) {
+	c1 := &mockCache{
+		mockGetData: map[string]json.RawMessage{
+			"1": json.RawMessage(`{"id": "1"}`),
+		},
+	}
+	c2 := &mockCache{
+		mockGetData: map[string]json.RawMessage{
+			"2": json.RawMessage(`{"id": "2"}`),
+		},
+	}
+	c3 := &mockCache{
+		mockGetData: map[string]json.RawMessage{
+			"3": json.RawMessage(`{"id": "3"}`),
+		},
+	}
+	c4 := &mockCache{
+		mockGetData: map[string]json.RawMessage{
+			"1": json.RawMessage(`{"id": "4"}`),
+		},
+	}
+
+	cache := Compose([]Cache{c1, c2, c3, c4})
+
+	fetcher := &mockFetcher{}
+	composed := WithCache(fetcher, cache)
+	fetchedData, errs := composed.FetchRequests(context.Background(), []string{"1", "2", "3"})
+
+	if len(errs) != 0 {
+		t.Errorf("Got unexpected errors: %v", errs)
+	}
+
+	if len(c4.gotGetIds) > 0 {
+		t.Error("Composed cache Get should have returned once all keys were filled.")
+	}
+
+	expectedData := map[string]json.RawMessage{
+		"1": json.RawMessage(`{"id": "1"}`),
+		"2": json.RawMessage(`{"id": "2"}`),
+		"3": json.RawMessage(`{"id": "3"}`),
+	}
+
+	if !reflect.DeepEqual(fetchedData, expectedData) {
+		t.Errorf("Expected %v, got: %v", expectedData, fetchedData)
 	}
 }
 
