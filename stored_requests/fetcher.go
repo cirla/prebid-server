@@ -65,11 +65,11 @@ func (c *composedCache) Get(ctx context.Context, ids []string) (data map[string]
 					remainingIds = append(remainingIds[:i], remainingIds[i+1:]...)
 				}
 			}
+		}
 
-			// return if all ids filled
-			if len(remainingIds) == 0 {
-				return
-			}
+		// return if all ids filled
+		if len(remainingIds) == 0 {
+			return
 		}
 	}
 	return
@@ -85,26 +85,6 @@ func (c *composedCache) Update(ctx context.Context, data map[string]json.RawMess
 	for _, cache := range c.caches {
 		cache.Update(ctx, data)
 	}
-}
-
-// EventProducer will produce cache update and invalidation events on its channels
-type EventProducer interface {
-	Updates() chan map[string]json.RawMessage
-	Invalidations() chan []string
-}
-
-// Listen will run a goroutine that updates/invalidates the cache when events occur
-func Listen(cache Cache, events EventProducer) {
-	go func() {
-		for {
-			select {
-			case data := <-events.Updates():
-				cache.Update(context.Background(), data)
-			case ids := <-events.Invalidations():
-				cache.Invalidate(context.Background(), ids)
-			}
-		}
-	}()
 }
 
 type fetcherWithCache struct {
