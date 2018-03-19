@@ -9,8 +9,8 @@ import (
 
 // EventProducer will produce cache update and invalidation events on its channels
 type EventProducer interface {
-	Updates() chan map[string]json.RawMessage
-	Invalidations() chan []string
+	Updates() <-chan map[string]json.RawMessage
+	Invalidations() <-chan []string
 }
 
 // Listen will run a goroutine that updates/invalidates the cache when events occur
