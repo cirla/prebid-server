@@ -7,7 +7,6 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/julienschmidt/httprouter"
 	"github.com/prebid/prebid-server/stored_requests/events"
@@ -22,26 +21,24 @@ func TestGoodRequests(t *testing.T) {
 		TTL:  -1,
 	})
 
-	apiEvents, endpoint, err := NewEventsAPI()
-	if err != nil {
-		t.Fatalf("Error creating endpoint: %v", err)
-	}
-
-	events.Listen(cache, apiEvents)
-
-	recorder := httptest.NewRecorder()
+	apiEvents, endpoint := NewEventsAPI()
+	listener := events.Listen(cache, apiEvents)
+	defer listener.Stop()
 
 	id := "1"
 	config := fmt.Sprintf(`{"id": "%s"}`, id)
 	request, params := newRequest("POST", id, config)
+
+	recorder := httptest.NewRecorder()
 	endpoint(recorder, request, params)
 
 	if recorder.Code != http.StatusOK {
 		t.Errorf("Unexpected error from request: %s", recorder.Body.String())
 	}
 
-	// TODO: find a better way to wait for channel to empty
-	time.Sleep(100 * time.Millisecond)
+	for listener.Count() < 1 {
+		// wait for listener goroutine to process the event
+	}
 	data := cache.Get(context.Background(), []string{id})
 	if value, ok := data[id]; !ok || string(value) != config {
 		t.Errorf("Key/Value not present in cache after update.")

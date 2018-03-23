@@ -22,12 +22,12 @@ type eventsAPI struct {
 // router.POST("/stored_requests/:id", apiEventsHandler)
 // router.DELETE("/stored_requests/:id", apiEventsHandler)
 // events.Listen(cache, apiEvents)
-func NewEventsAPI() (events.EventProducer, httprouter.Handle, error) {
+func NewEventsAPI() (events.EventProducer, httprouter.Handle) {
 	api := &eventsAPI{
 		invalidations: make(chan []string),
 		updates:       make(chan map[string]json.RawMessage),
 	}
-	return api, httprouter.Handle(api.HandleEvent), nil
+	return api, httprouter.Handle(api.HandleEvent)
 }
 
 func (api *eventsAPI) HandleEvent(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
@@ -41,7 +41,7 @@ func (api *eventsAPI) HandleEvent(w http.ResponseWriter, r *http.Request, ps htt
 			return
 		}
 
-		// check if JSON (TODO: validate that it is a valid request config?)
+		// check if valid JSON
 		var config json.RawMessage
 		if err := json.Unmarshal(body, &config); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
