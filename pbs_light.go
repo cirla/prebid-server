@@ -64,6 +64,8 @@ import (
 	"github.com/prebid/prebid-server/stored_requests/backends/empty_fetcher"
 	"github.com/prebid/prebid-server/stored_requests/backends/file_fetcher"
 	"github.com/prebid/prebid-server/stored_requests/caches/in_memory"
+	"github.com/prebid/prebid-server/stored_requests/events"
+	pgEvents "github.com/prebid/prebid-server/stored_requests/events/postgres"
 	usersyncers "github.com/prebid/prebid-server/usersync"
 )
 
@@ -917,17 +919,22 @@ func serve(cfg *config.Configuration) error {
 	theMetrics := pbsmetrics.NewMetrics(metricsRegistry, openrtb_ext.BidderList())
 	theExchange := exchange.NewExchange(theClient, pbc.NewClient(&cfg.CacheURL), cfg, theMetrics)
 
-	byId, byAmpId, err := NewFetchers(&(cfg.StoredRequests), db)
+	byID, byAmpID, listeners, err := NewFetchers(&(cfg.StoredRequests), db)
 	if err != nil {
 		glog.Fatalf("Failed to initialize config backends. %v", err)
 	}
+	defer func() {
+		for _, l := range listeners {
+			l.Stop()
+		}
+	}()
 
-	openrtbEndpoint, err := openrtb2.NewEndpoint(theExchange, paramsValidator, byId, cfg, theMetrics)
+	openrtbEndpoint, err := openrtb2.NewEndpoint(theExchange, paramsValidator, byID, cfg, theMetrics)
 	if err != nil {
 		glog.Fatalf("Failed to create the openrtb endpoint handler. %v", err)
 	}
 
-	ampEndpoint, err := openrtb2.NewAmpEndpoint(theExchange, paramsValidator, byAmpId, cfg, theMetrics)
+	ampEndpoint, err := openrtb2.NewAmpEndpoint(theExchange, paramsValidator, byAmpID, cfg, theMetrics)
 	if err != nil {
 		glog.Fatalf("Failed to create the amp endpoint handler. %v", err)
 	}
@@ -1014,28 +1021,46 @@ const requestConfigPath = "./stored_requests/data/by_id"
 // If it can't generate both of those from the given config, then an error will be returned.
 //
 // This function assumes that the argument config has been validated.
-func NewFetchers(cfg *config.StoredRequests, db *sql.DB) (byId stored_requests.Fetcher, byAmpId stored_requests.Fetcher, err error) {
+func NewFetchers(cfg *config.StoredRequests, db *sql.DB) (byID stored_requests.Fetcher, byAmpID stored_requests.Fetcher, listeners []events.EventListener, err error) {
 	if cfg.Files {
 		glog.Infof("Loading Stored Requests from filesystem at path %s", requestConfigPath)
-		byId, err = file_fetcher.NewFileFetcher(requestConfigPath)
+		byID, err = file_fetcher.NewFileFetcher(requestConfigPath)
 		// Currently assuming the file store is "flat", that is IDs are unique across all config types
 		// and that the files for all the types sit next to each other.
-		byAmpId = byId
+		byAmpID = byID
 	} else if cfg.Postgres != nil {
 		// Be careful not to log the password here, for security reasons
 		glog.Infof("Loading Stored Requests from Postgres. DB=%s, host=%s, port=%d, user=%s, query=%s", cfg.Postgres.Database, cfg.Postgres.Host, cfg.Postgres.Port, cfg.Postgres.Username, cfg.Postgres.QueryTemplate)
-		byId = db_fetcher.NewFetcher(db, cfg.Postgres.MakeQuery)
-		byAmpId = db_fetcher.NewFetcher(db, cfg.Postgres.MakeAmpQuery)
+		byID = db_fetcher.NewFetcher(db, cfg.Postgres.MakeQuery)
+		byAmpID = db_fetcher.NewFetcher(db, cfg.Postgres.MakeAmpQuery)
 	} else {
 		glog.Warning("No Stored Request support configured. request.imp[i].ext.prebid.storedrequest will be ignored. If you need this, check your app config")
-		byId = empty_fetcher.EmptyFetcher()
-		byAmpId = byId
+		byID = empty_fetcher.EmptyFetcher()
+		byAmpID = byID
 	}
 
 	if cfg.InMemoryCache != nil {
 		glog.Infof("Using a Stored Request in-memory cache. Max size: %d bytes. TTL: %d seconds.", cfg.InMemoryCache.Size, cfg.InMemoryCache.TTL)
-		byId = stored_requests.WithCache(byId, in_memory.NewLRUCache(cfg.InMemoryCache))
-		byAmpId = stored_requests.WithCache(byAmpId, in_memory.NewLRUCache(cfg.InMemoryCache))
+
+		byIDCache := in_memory.NewLRUCache(cfg.InMemoryCache)
+		byAmpIDCache := in_memory.NewLRUCache(cfg.InMemoryCache)
+
+		byID = stored_requests.WithCache(byID, byIDCache)
+		byAmpID = stored_requests.WithCache(byAmpID, byAmpIDCache)
+
+		if cfg.PostgresEvents != nil && cfg.Postgres != nil {
+			glog.Infof("Using a Postgres EventProducer with in-memory cache. Channel: %s, AmpChannel: %s", cfg.PostgresEvents.EventChannel, cfg.PostgresEvents.AmpEventChannel)
+			connInfo := db_fetcher.ConfToPostgresDSN(cfg.Postgres)
+			pgEventProducer, err := pgEvents.NewPostgresEvents(connInfo, cfg.PostgresEvents.EventChannel, cfg.PostgresEvents.MinReconnectIntervalSecs*time.Second, cfg.PostgresEvents.MaxReconnectIntervalSecs*time.Second)
+			if err == nil {
+				listeners = append(listeners, events.Listen(byIDCache, pgEventProducer))
+			}
+			pgAmpEventProducer, err := pgEvents.NewPostgresEvents(connInfo, cfg.PostgresEvents.AmpEventChannel, cfg.PostgresEvents.MinReconnectIntervalSecs*time.Second, cfg.PostgresEvents.MaxReconnectIntervalSecs*time.Second)
+			if err == nil {
+				listeners = append(listeners, events.Listen(byAmpIDCache, pgAmpEventProducer))
+			}
+		}
 	}
+
 	return
 }
