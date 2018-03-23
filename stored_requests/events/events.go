@@ -16,17 +16,23 @@ type EventProducer interface {
 // EventListener provides information about how many events a listener has processed
 // and a mechanism to stop the listener goroutine
 type EventListener interface {
-	Count() int
+	InvalidationCount() int
+	UpdateCount() int
 	Stop()
 }
 
 type eventListener struct {
-	count int
-	stop  chan struct{}
+	invalidationCount int
+	updateCount       int
+	stop              chan struct{}
 }
 
-func (e eventListener) Count() int {
-	return e.count
+func (e eventListener) InvalidationCount() int {
+	return e.invalidationCount
+}
+
+func (e eventListener) UpdateCount() int {
+	return e.updateCount
 }
 
 func (e *eventListener) Stop() {
@@ -36,8 +42,9 @@ func (e *eventListener) Stop() {
 // Listen will run a goroutine that updates/invalidates the cache when events occur
 func Listen(cache stored_requests.Cache, events EventProducer) EventListener {
 	listener := &eventListener{
-		count: 0,
-		stop:  make(chan struct{}),
+		invalidationCount: 0,
+		updateCount:       0,
+		stop:              make(chan struct{}),
 	}
 
 	go func() {
@@ -45,10 +52,10 @@ func Listen(cache stored_requests.Cache, events EventProducer) EventListener {
 			select {
 			case data := <-events.Updates():
 				cache.Update(context.Background(), data)
-				listener.count++
+				listener.updateCount++
 			case ids := <-events.Invalidations():
 				cache.Invalidate(context.Background(), ids)
-				listener.count++
+				listener.invalidationCount++
 			case <-listener.stop:
 				break
 			}

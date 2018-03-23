@@ -21,7 +21,10 @@ type eventsAPI struct {
 // apiEvents, apiEventsHandler, err := NewEventsApi()
 // router.POST("/stored_requests/:id", apiEventsHandler)
 // router.DELETE("/stored_requests/:id", apiEventsHandler)
-// events.Listen(cache, apiEvents)
+// listener := events.Listen(cache, apiEvents)
+//
+// The returned HTTP endpoint should not be exposed on a public network without authentication
+// as it allows direct writing to the cache via Update.
 func NewEventsAPI() (events.EventProducer, httprouter.Handle) {
 	api := &eventsAPI{
 		invalidations: make(chan []string),
@@ -53,6 +56,8 @@ func (api *eventsAPI) HandleEvent(w http.ResponseWriter, r *http.Request, ps htt
 
 	} else if r.Method == "DELETE" {
 		api.invalidations <- []string{id}
+	} else {
+		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
 }
 
