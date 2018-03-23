@@ -133,7 +133,7 @@ func TestComposedCache(t *testing.T) {
 		},
 	}
 
-	cache := Compose([]Cache{c1, c2, c3, c4})
+	cache := ComposedCache{c1, c2, c3, c4}
 
 	fetcher := &mockFetcher{}
 	composed := WithCache(fetcher, cache)

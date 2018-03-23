@@ -13,6 +13,8 @@ type EventProducer interface {
 	Invalidations() <-chan []string
 }
 
+// EventListener provides information about how many events a listener has processed
+// and a mechanism to stop the listener goroutine
 type EventListener interface {
 	Count() int
 	Stop()

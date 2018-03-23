@@ -38,25 +38,16 @@ type Cache interface {
 	Update(ctx context.Context, data map[string]json.RawMessage)
 }
 
-type composedCache struct {
-	caches []Cache
-}
+// ComposedCache creates an interface to treat a slice of caches as a single cache
+type ComposedCache []Cache
 
-// Compose will compose caches into a single cache.
-// The returned cache will attempt to Get from the caches in the order in which. they are provided,
-// stopping as soon as a value is found (or when all caches have been exhausted).
-// Invalidations and updates are propagated to all underlying caches.
-func Compose(caches []Cache) Cache {
-	return &composedCache{
-		caches: caches,
-	}
-}
-
-func (c *composedCache) Get(ctx context.Context, ids []string) (data map[string]json.RawMessage) {
+// Get will attempt to Get from the caches in the order in which they are in the slice,
+// stopping as soon as a value is found (or when all caches have been exhausted)
+func (c ComposedCache) Get(ctx context.Context, ids []string) (data map[string]json.RawMessage) {
 	data = make(map[string]json.RawMessage)
 	remainingIds := ids
 
-	for _, cache := range c.caches {
+	for _, cache := range c {
 		if cachedData := cache.Get(ctx, remainingIds); len(cachedData) > 0 {
 			// iterate over remainingIds from end, droppings ids as they are filled
 			for i := len(remainingIds) - 1; i >= 0; i-- {
@@ -75,14 +66,16 @@ func (c *composedCache) Get(ctx context.Context, ids []string) (data map[string]
 	return
 }
 
-func (c *composedCache) Invalidate(ctx context.Context, ids []string) {
-	for _, cache := range c.caches {
+// Invalidate will propagate invalidations to all underlying caches
+func (c ComposedCache) Invalidate(ctx context.Context, ids []string) {
+	for _, cache := range c {
 		cache.Invalidate(ctx, ids)
 	}
 }
 
-func (c *composedCache) Update(ctx context.Context, data map[string]json.RawMessage) {
-	for _, cache := range c.caches {
+// Update will propagate updates to all underlying caches
+func (c ComposedCache) Update(ctx context.Context, data map[string]json.RawMessage) {
+	for _, cache := range c {
 		cache.Update(ctx, data)
 	}
 }
