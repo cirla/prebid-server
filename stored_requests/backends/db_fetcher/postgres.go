@@ -9,7 +9,7 @@ import (
 )
 
 func NewPostgresDb(cfg *config.PostgresConfig) (*sql.DB, error) {
-	db, err := sql.Open("postgres", confToPostgresDSN(cfg))
+	db, err := sql.Open("postgres", ConfToPostgresDSN(cfg))
 	if err != nil {
 		return nil, err
 	}
@@ -21,9 +21,9 @@ func NewPostgresDb(cfg *config.PostgresConfig) (*sql.DB, error) {
 	return db, nil
 }
 
-// confToPostgresDSN converts our app config into a string for the pq driver.
+// ConfToPostgresDSN converts our app config into a string for the pq driver.
 // For their docs, and the intended behavior of this function, see:  https://godoc.org/github.com/lib/pq
-func confToPostgresDSN(cfg *config.PostgresConfig) string {
+func ConfToPostgresDSN(cfg *config.PostgresConfig) string {
 	buffer := bytes.NewBuffer(nil)
 
 	if cfg.Host != "" {

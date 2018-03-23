@@ -14,6 +14,9 @@ type StoredRequests struct {
 	Files bool `mapstructure:"filesystem"`
 	// Postgres should be non-nil if Stored Requests should be loaded from a Postgres database.
 	Postgres *PostgresConfig `mapstructure:"postgres"`
+	// PostgresEvents should be non-nil if Stored Requests should listen for cache events from a Postgres database.
+	// Requires Postgres config and InMemoryCache config to also be present.
+	PostgresEvents *PostgresEventsConfig `mapstructure:"postgres_events"`
 	// Cache should be non-nil if an in-memory cache should be used to store Stored Requests locally.
 	InMemoryCache *InMemoryCache `mapstructure:"in_memory_cache"`
 }
@@ -82,6 +85,13 @@ func makeIdList(numRequests int) string {
 	final.WriteString(")")
 
 	return final.String()
+}
+
+type PostgresEventsConfig struct {
+	EventChannel             string `mapstructure:"event_channel"`
+	AmpEventChannel          string `mapstructure:"amp_event_channel"`
+	MinReconnectIntervalSecs int    `mapstructure:"min_reconnect_interval_secs"`
+	MaxReconnectIntervalSecs int    `mapstructure:"max_reconnect_interval_secs"`
 }
 
 type InMemoryCache struct {
